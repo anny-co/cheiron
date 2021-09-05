@@ -1,5 +1,7 @@
 # anny-co/cheiron
 
+> NOTE: Cheiron is currently in very early stages of development and and far from anything usable. Feel free to contribute if you want to, an(n)y contributions are welcome!
+
 Cheiron is a Kubernetes Operator built from the Operator SDK and written in Go. It maintains imagePullSecrets, both on ServiceAccounts and PodSpecs,
 cluster-wide or only namespaced.
 
