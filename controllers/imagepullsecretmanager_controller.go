@@ -159,6 +159,8 @@ func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Cont
 		}
 	}
 
+	// TODO(fix): add fallthrough for neither, existingSecretRef, or full specification of creds being present
+
 	username := secret.Username
 	password := secret.Password
 	email := secret.Email
@@ -171,6 +173,8 @@ func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Cont
 	}
 
 	existingSecret.Data[corev1.DockerConfigJsonKey] = dockerConfigJSONContent
+
+	// TODO(refactor): add ownerRef on the resource
 
 	if create {
 		if err := r.Client.Create(ctx, existingSecret); err != nil {
