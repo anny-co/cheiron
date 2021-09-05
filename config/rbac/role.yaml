@@ -1,0 +1,112 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - clusterimagepullsecretmanagers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - clusterimagepullsecretmanagers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - clusterimagepullsecretmanagers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - imagepullsecretmanagers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - imagepullsecretmanagers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - imagepullsecretmanagers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - pods/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - pods/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - serviceaccounts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cheiron.anny.co
+  resources:
+  - serviceaccounts/status
+  verbs:
+  - get
+  - patch
+  - update

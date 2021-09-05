@@ -1,0 +1,57 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: cheiron.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ClusterImagePullSecretManager is the Schema for the clusterimagepullsecretmanagers
+        API
+      displayName: Cluster Image Pull Secret Manager
+      kind: ClusterImagePullSecretManager
+      name: clusterimagepullsecretmanagers.cheiron.anny.co
+      version: v1alpha1
+    - description: ImagePullSecretManager is the Schema for the imagepullsecretmanagers
+        API
+      displayName: Image Pull Secret Manager
+      kind: ImagePullSecretManager
+      name: imagepullsecretmanagers.cheiron.anny.co
+      version: v1alpha1
+  description: Operator for managing shared imagePullSecrets across all Pods and ServiceAccounts
+    in a Namespace or Cluster
+  displayName: Cheiron
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - imagePullSecrets
+  - ServiceAccounts
+  - Pods
+  links:
+  - name: Cheiron
+    url: https://cheiron.domain
+  maintainers:
+  - email: alexander.bartolomey@anny.co
+    name: Alexander Bartolomey
+  maturity: alpha
+  provider:
+    name: cheiron
+  version: 0.0.0
