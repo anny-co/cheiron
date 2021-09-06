@@ -40,14 +40,14 @@ type ImagePullSecretManagerReconciler struct {
 }
 
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=imagepullsecretmanagers,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=cheiron.anny.co,resources=pods,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=cheiron.anny.co,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cheiron.anny.co,resources=pods,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=cheiron.anny.co,resources=serviceaccounts,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=imagepullsecretmanagers/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=imagepullsecretmanagers/finalizers,verbs=update
 
 var reconcilableAnnotation = "cheiron.anny.co/reconcilable"
 var ignoreAnnotation = "cheiron.anny.co/ignore"
-var reconcileWith = "cheiron.anny.co/reconcile-with"
+var reconcileWithAnnotation = "cheiron.anny.co/reconcile-with"
 
 // filters() filters events to reduce load on Pod updates where the reconciled annotation is set
 // by the operator
@@ -83,7 +83,7 @@ func updatePodAnnotations(pod corev1.Pod, secrets string) corev1.Pod {
 		// pod currently is not marked as reconcilable, add the annotation!
 		pod.Annotations[reconcilableAnnotation] = "true"
 		pod.Annotations[ignoreAnnotation] = "false"
-		pod.Annotations[reconcileWith] = secrets
+		pod.Annotations[reconcileWithAnnotation] = secrets
 	}
 	return pod
 }
@@ -101,7 +101,7 @@ func updateServiceAccountAnnotations(sa corev1.ServiceAccount, secrets string) c
 		// pod currently is not marked as reconcilable, add the annotation!
 		sa.Annotations[reconcilableAnnotation] = "true"
 		sa.Annotations[ignoreAnnotation] = "false"
-		sa.Annotations[reconcileWith] = secrets
+		sa.Annotations[reconcileWithAnnotation] = secrets
 	}
 	return sa
 }
@@ -142,13 +142,13 @@ func (r *ImagePullSecretManagerReconciler) GetAndUpdateServiceAccounts(ctx conte
 
 // CreateOrUpdateSecret fetches an existing secret with the name specified in the CR or creates a new one,
 // adds the registry credentials as payload and (re-)submits it to the API server
-func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Context, req ctrl.Request, secret cheironv1alpha1.ImagePullSecretSpec) (*corev1.Secret, error) {
+func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Context, req ctrl.Request, manager *cheironv1alpha1.ImagePullSecretManager, pullSecret *cheironv1alpha1.ImagePullSecretSpec) (*corev1.Secret, error) {
 	log := log.FromContext(ctx)
 	create := false
-	name := types.NamespacedName{Name: secret.Name, Namespace: req.Namespace}
+	name := types.NamespacedName{Name: pullSecret.Name, Namespace: req.Namespace}
 	existingSecret := &corev1.Secret{}
 
-	err := r.Client.Get(ctx, name, existingSecret)
+	err := r.Get(ctx, name, existingSecret)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// no secret with that name exists, create a new one!
@@ -159,12 +159,10 @@ func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Cont
 		}
 	}
 
-	// TODO(fix): add fallthrough for neither, existingSecretRef, or full specification of creds being present
-
-	username := secret.Username
-	password := secret.Password
-	email := secret.Email
-	registry := secret.Registry
+	username := pullSecret.Username
+	password := pullSecret.Password
+	email := pullSecret.Email
+	registry := pullSecret.Registry
 	dockerConfigJSONContent, err := handleDockerCfgJSONContent(username, password, email, registry)
 
 	if err != nil {
@@ -174,18 +172,32 @@ func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Cont
 
 	existingSecret.Data[corev1.DockerConfigJsonKey] = dockerConfigJSONContent
 
-	// TODO(refactor): add ownerRef on the resource
+	if err := ctrl.SetControllerReference(manager, existingSecret, r.Scheme); err != nil {
+		return nil, err
+	}
 
 	if create {
-		if err := r.Client.Create(ctx, existingSecret); err != nil {
+		if err := r.Create(ctx, existingSecret); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := r.Client.Update(ctx, existingSecret); err != nil {
+		if err := r.Update(ctx, existingSecret); err != nil {
 			return nil, err
 		}
 	}
 	return existingSecret, nil
+}
+
+// secretIsFullySpecified is a validator function for a ImagePullSecretSpec that returns either true if the secret spec is sufficient or
+// false if not
+func secretIsFullySpecified(secret *cheironv1alpha1.ImagePullSecretSpec) bool {
+	if secret.ExistingSecretRef.Name == "" {
+		if secret.Name != "" && secret.Email != "" && secret.Password != "" && secret.Username != "" && secret.Registry != "" {
+			return true
+		}
+		return false
+	}
+	return true
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -201,20 +213,26 @@ func (r *ImagePullSecretManagerReconciler) Reconcile(ctx context.Context, req ct
 	log := log.FromContext(ctx)
 
 	// get the manager object in the specific namespace from API server
-	imagePullSecretManager := &cheironv1alpha1.ImagePullSecretManager{}
-	if err := r.Get(ctx, req.NamespacedName, imagePullSecretManager); err != nil {
+	imgr := &cheironv1alpha1.ImagePullSecretManager{}
+	if err := r.Get(ctx, req.NamespacedName, imgr); err != nil {
 		log.Error(err, "Unable to fetch ImagePullSecretManager")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// TODO(fix): add fallthrough for neither, existingSecretRef, or full specification of creds being present
 	secretNames := []string{}
-	for _, secret := range imagePullSecretManager.Spec.Secrets {
+	for _, secret := range imgr.Spec.Secrets {
+		if !secretIsFullySpecified(&secret) {
+			// skip this secret as it is not fully specified
+			log.Error(errors.NewBadRequest("Secret not fully specified"), "ImagePullSecret is not fully specified", "imagePullSecretManager", imgr.Name)
+			continue
+		}
 		if secret.ExistingSecretRef.Name != "" {
 			// existing secret ref present as localObjectReference, just add the name to the string for annotation
 			secretNames = append(secretNames, secret.ExistingSecretRef.Name)
 		} else {
 			// create new dockerconfigjson secret from the given name if it does not exist, and update its payload
-			secretObj, err := r.CreateOrUpdateSecret(ctx, req, secret)
+			secretObj, err := r.CreateOrUpdateSecret(ctx, req, imgr, &secret)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -228,7 +246,7 @@ func (r *ImagePullSecretManagerReconciler) Reconcile(ctx context.Context, req ct
 	// the LocalObjectReference name set as annotation to consume from either PodController or
 	// ServiceAccountController
 
-	mode := imagePullSecretManager.Spec.Mode
+	mode := imgr.Spec.Mode
 	if mode == cheironv1alpha1.PodMode {
 		return r.GetAndUpdatePods(ctx, req, s)
 	} else if mode == cheironv1alpha1.ServiceAccountMode {
