@@ -115,6 +115,7 @@ scope (either namespaced or cluster-scoped) reconcilable using annotations:
 metadata:
   annotations:
     cheiron.anny.co/reconcilable: "true"
+    cheiron.anny.co/reconcile-with: "secret-name-a,secret-name-b,..."
 ```
 
 Note that this is only done on ressources that do not yet have the annotation or
@@ -124,5 +125,10 @@ an annotation that contains all the names of the fresh secrets, s.t. we can
 construct a list of LocalObjectReferences on either the
 `PodSpec.ImagePullSecrets` or `ServiceAccount.ImagePullSecrets`.
 
-> `TODO(docs): add further documentation for the pod_controller.go and
-> serviceaccount_controller.go`
+The *PodController* and *ServiceAccountController* perform similar operations on
+their respective resources: As the first controller adds the annotations from
+above, their (the pod controller's and service account controller's)
+reconciliation loop picks up the annotated resource and adds the inlined image
+pull secrets to the specs. They finish their operations by annotating their
+ressource with `cheiron.anny.co/reconciled: "true"`. This allows the controllers
+to filter what resources they already worked.
