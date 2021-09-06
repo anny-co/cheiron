@@ -48,6 +48,7 @@ type ImagePullSecretManagerReconciler struct {
 var reconcilableAnnotation = "cheiron.anny.co/reconcilable"
 var ignoreAnnotation = "cheiron.anny.co/ignore"
 var reconcileWithAnnotation = "cheiron.anny.co/reconcile-with"
+var reconciledAnnotation = "cheiron.anny.co/reconciled"
 
 // filters() filters events to reduce load on Pod updates where the reconciled annotation is set
 // by the operator
@@ -61,8 +62,8 @@ func filters() predicate.Predicate {
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			annotations := e.ObjectOld.GetAnnotations()
-			val, ok := annotations["cheiron.anny.co/is-reconciled"]
-			return !ok || val == "False"
+			val, ok := annotations[reconciledAnnotation]
+			return !ok || val != "true"
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			return false
