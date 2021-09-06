@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +33,7 @@ type ImagePullSecretManagerPodReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=cheiron.anny.co,resources=pods,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cheiron.anny.co,resources=pods,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=pods/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=pods/finalizers,verbs=update
 
@@ -54,6 +55,40 @@ func (r *ImagePullSecretManagerPodReconciler) Reconcile(ctx context.Context, req
 		log.Error(err, "Unable to fetch Pod")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	annotations := pod.GetAnnotations()
+
+	isReconcilable, isReconcilablePresent := annotations[reconcilableAnnotation]
+	reconcileWith, isReconcilableWithPresent := annotations[reconcileWithAnnotation]
+
+	if !isReconcilablePresent || isReconcilable != "true" {
+		log.Info("Resource is marked as non-reconcilable", "pod", pod.Name)
+		return ctrl.Result{}, nil
+	}
+
+	if !isReconcilableWithPresent || reconcileWith == "" {
+		log.Info("No secrets attached to the resource, not adding secrets", "pod", pod.Name)
+	}
+
+	secrets := strings.Split(reconcileWith, ",")
+
+	imagePullSecrets := []corev1.LocalObjectReference{}
+
+	for _, s := range secrets {
+		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{
+			Name: strings.TrimSpace(s),
+		})
+	}
+
+	pod.Spec.ImagePullSecrets = imagePullSecrets
+
+	if err := r.Update(ctx, pod); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Updated Pod with imagePullSecrets", "pod", pod.Name)
+
+	// TODO(fix): clarify if this operator's actions would clash with flux operator
 
 	return ctrl.Result{}, nil
 }
