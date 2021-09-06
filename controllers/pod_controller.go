@@ -82,6 +82,9 @@ func (r *ImagePullSecretManagerPodReconciler) Reconcile(ctx context.Context, req
 
 	pod.Spec.ImagePullSecrets = imagePullSecrets
 
+	// mark pod as reconciled s.t. later reconciles don't pick up this pod again (see filters())
+	pod.Annotations[reconciledAnnotation] = "true"
+
 	if err := r.Update(ctx, pod); err != nil {
 		return ctrl.Result{}, err
 	}

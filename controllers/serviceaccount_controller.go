@@ -82,6 +82,13 @@ func (r *ImagePullSecretManagerServiceAccountReconciler) Reconcile(ctx context.C
 
 	serviceAccount.ImagePullSecrets = imagePullSecrets
 
+	// mark serviceAccount as reconciled s.t. later reconciles don't pick up this serviceAccount again (see filters())
+	serviceAccount.Annotations[reconciledAnnotation] = "true"
+
+	if err := r.Update(ctx, serviceAccount); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	log.Info("Updated ServiceAccount with imagePullSecrets", "serviceAccount", serviceAccount.Name)
 
 	// TODO(fix): clarify if this operator's actions would clash with flux operator
