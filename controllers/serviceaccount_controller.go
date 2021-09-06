@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +33,7 @@ type ImagePullSecretManagerServiceAccountReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=cheiron.anny.co,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cheiron.anny.co,resources=serviceaccounts,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=serviceaccounts/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cheiron.anny.co,resources=serviceaccounts/finalizers,verbs=update
 
@@ -55,7 +56,38 @@ func (r *ImagePullSecretManagerServiceAccountReconciler) Reconcile(ctx context.C
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	annotations := serviceAccount.GetAnnotations()
+
+	isReconcilable, isReconcilablePresent := annotations[reconcilableAnnotation]
+	reconcileWith, isReconcilableWithPresent := annotations[reconcileWithAnnotation]
+
+	if !isReconcilablePresent || isReconcilable != "true" {
+		log.Info("Resource is marked as non-reconcilable", "serviceAccount", serviceAccount.Name)
+		return ctrl.Result{}, nil
+	}
+
+	if !isReconcilableWithPresent || reconcileWith == "" {
+		log.Info("No secrets attached to the resource, not adding secrets", "serviceAccount", serviceAccount.Name)
+	}
+
+	secrets := strings.Split(reconcileWith, ",")
+
+	imagePullSecrets := []corev1.LocalObjectReference{}
+
+	for _, s := range secrets {
+		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{
+			Name: strings.TrimSpace(s),
+		})
+	}
+
+	serviceAccount.ImagePullSecrets = imagePullSecrets
+
+	log.Info("Updated ServiceAccount with imagePullSecrets", "serviceAccount", serviceAccount.Name)
+
+	// TODO(fix): clarify if this operator's actions would clash with flux operator
+
 	return ctrl.Result{}, nil
+
 }
 
 // SetupWithManager sets up the controller with the Manager.
