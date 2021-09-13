@@ -156,6 +156,7 @@ func (r *ImagePullSecretManagerReconciler) CreateOrUpdateSecret(ctx context.Cont
 			create = true
 			existingSecret = newDockerSecretObj(name.Name, req.Namespace)
 		} else {
+			log.Error(err, "Error while fetching secrets from API")
 			return nil, err
 		}
 	}
@@ -215,9 +216,14 @@ func (r *ImagePullSecretManagerReconciler) Reconcile(ctx context.Context, req ct
 
 	// get the manager object in the specific namespace from API server
 	imgr := &cheironv1alpha1.ImagePullSecretManager{}
-	if err := r.Get(ctx, req.NamespacedName, imgr); err != nil {
+	err := r.Get(ctx, req.NamespacedName, imgr)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Manager CR not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "Unable to fetch ImagePullSecretManager")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, err
 	}
 
 	// TODO(fix): add fallthrough for neither, existingSecretRef, or full specification of creds being present
